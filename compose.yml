@@ -158,8 +158,8 @@ services:
       CUBEJS_CACHE_AND_QUEUE_DRIVER: memory
       CUBEJS_DEFAULT_API_SCOPES: meta,data
     volumes:
-      - ../docker/cube/cube.js:/cube/conf/cube.js:ro
-      - ../docker/cube/schema:/cube/conf/model:ro
+      - ./cube/cube.js:/cube/conf/cube.js:ro
+      - ./cube/schema:/cube/conf/model:ro
     healthcheck:
       test:
         [
