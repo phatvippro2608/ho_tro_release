@@ -30,8 +30,8 @@ elif [ -f "$REPO_ROOT/.env" ]; then
     done < "$REPO_ROOT/.env"
 fi
 
-# Create a temporary secure file for environment variables
-TEMP_ENV=$(mktemp /tmp/khaosat-env.XXXXXX)
+# Create a temporary environment file in the same directory
+TEMP_ENV="$SCRIPT_DIR/.env.tmp"
 
 # Ensure the temp file is deleted on exit (even in case of errors)
 cleanup() {
@@ -194,7 +194,7 @@ else
     exit 1
 fi
 
-ENV_FILE="$TEMP_ENV" $COMPOSE_CMD -f "$SCRIPT_DIR/compose.yml" --env-file "$TEMP_ENV" up -d
+ENV_FILE=".env.tmp" $COMPOSE_CMD -f "$SCRIPT_DIR/compose.yml" up -d
 
 echo "----------------------------------------------------------"
 echo " Success! Khaosat VLUTE services are starting."
