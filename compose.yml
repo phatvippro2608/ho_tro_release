@@ -1,0 +1,180 @@
+services:
+  # PostgreSQL with pgvector (required by Formbricks and Hub)
+  postgres:
+    restart: always
+    image: pgvector/pgvector:pg18
+    container_name: khao_sat_postgres
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=formbricks
+    command: >
+      postgres
+      -c shared_preload_libraries=vector
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+
+  # Redis/Valkey service for caching, rate limiting, and audit logging
+  redis:
+    restart: always
+    image: valkey/valkey@sha256:12ba4f45a7c3e1d0f076acd616cb230834e75a77e8516dde382720af32832d6d
+    container_name: khao_sat_redis
+    command: valkey-server --appendonly yes --maxmemory-policy noeviction
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+
+  # Run Formbricks Prisma migrations before Web/Hub starts
+  formbricks-migrate:
+    image: phattan5262/khaosat-web:latest
+    restart: "no"
+    container_name: khao_sat_migrate
+    entrypoint: ["sh", "-c"]
+    command:
+      [
+        'if command -v timeout >/dev/null 2>&1; then timeout 300 node packages/database/dist/scripts/apply-migrations.js; else node packages/database/dist/scripts/apply-migrations.js; fi',
+      ]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - ${ENV_FILE:-.env}
+
+  # Main Formbricks Web App (Next.js)
+  formbricks:
+    restart: always
+    image: phattan5262/khaosat-web:latest
+    container_name: khao_sat_web
+    env_file:
+      - ${ENV_FILE:-.env}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      formbricks-migrate:
+        condition: service_completed_successfully
+      cube:
+        condition: service_healthy
+    ports:
+      - "8885:3000"
+    volumes:
+      - ./saml-connection:/home/nextjs/apps/web/saml-connection
+      - ./uploads:/home/nextjs/apps/web/uploads
+    environment:
+      SKIP_STARTUP_MIGRATION: "true"
+
+  # Create Hub's database if it does not exist
+  hub-db-create:
+    image: pgvector/pgvector:pg18
+    restart: "no"
+    container_name: khao_sat_hub_db_create
+    entrypoint: ["sh", "-c"]
+    command:
+      [
+        'if [ "$$(psql "$$POSTGRES_DATABASE_URL" -tAc "SELECT 1 FROM pg_database WHERE datname = ''hub''")" != "1" ]; then psql "$$POSTGRES_DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE DATABASE hub"; fi',
+      ]
+    environment:
+      POSTGRES_DATABASE_URL: postgresql://postgres:postgres@postgres:5432/postgres?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Run Hub DB migrations (goose + river)
+  hub-migrate:
+    image: ghcr.io/formbricks/hub:latest
+    restart: "no"
+    container_name: khao_sat_hub_migrate
+    entrypoint: ["sh", "-c"]
+    command:
+      [
+        'if [ -x /usr/local/bin/goose ] && [ -x /usr/local/bin/river ]; then /usr/local/bin/goose -dir /app/migrations postgres "$$DATABASE_URL" up && /usr/local/bin/river migrate-up --database-url "$$DATABASE_URL"; else echo ''Migration tools not found''; exit 1; fi',
+      ]
+    environment:
+      DATABASE_URL: ${HUB_DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/hub?sslmode=disable}
+    depends_on:
+      hub-db-create:
+        condition: service_completed_successfully
+      formbricks-migrate:
+        condition: service_completed_successfully
+
+  # Hub service (consumes internal tasks and AI embeddings/taxonomy)
+  hub:
+    restart: always
+    image: ghcr.io/formbricks/hub:latest
+    container_name: khao_sat_hub
+    depends_on:
+      hub-migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    environment:
+      API_KEY: ${HUB_API_KEY:-}
+      DATABASE_URL: ${HUB_DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/hub?sslmode=disable}
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: hub
+      PGSSLMODE: disable
+
+  # Cube semantic-layer service (used for surveys analytical charts)
+  cube:
+    restart: always
+    image: cubejs/cube:v1.6.6
+    container_name: khao_sat_cube
+    command:
+      - sh
+      - -c
+      - |
+        if [ -z "$$CUBEJS_API_SECRET" ]; then
+          echo "CUBEJS_API_SECRET is required for Cube JWT authentication" >&2
+          exit 1
+        fi
+        exec cubejs server
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - ${ENV_FILE:-.env}
+    environment:
+      CUBEJS_DB_TYPE: postgres
+      CUBEJS_DB_HOST: ${CUBEJS_DB_HOST:-postgres}
+      CUBEJS_DB_NAME: ${CUBEJS_DB_NAME:-formbricks}
+      CUBEJS_DB_USER: ${CUBEJS_DB_USER:-postgres}
+      CUBEJS_DB_PASS: ${CUBEJS_DB_PASS:-postgres}
+      CUBEJS_DB_PORT: ${CUBEJS_DB_PORT:-5432}
+      CUBEJS_CACHE_AND_QUEUE_DRIVER: memory
+      CUBEJS_DEFAULT_API_SCOPES: meta,data
+    volumes:
+      - ../docker/cube/cube.js:/cube/conf/cube.js:ro
+      - ../docker/cube/schema:/cube/conf/model:ro
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:4000/readyz', (res) => { res.resume(); process.exit(res.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1));",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+volumes:
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
