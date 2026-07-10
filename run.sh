@@ -43,8 +43,8 @@ trap cleanup EXIT
 # ----------------- Defaults & Environment Variables -----------------
 
 # Basics
-WEBAPP_URL=${WEBAPP_URL:-"http://localhost:3000/khao-sat"}
-NEXTAUTH_URL=${NEXTAUTH_URL:-"http://localhost:3000/khao-sat"}
+WEBAPP_URL=${WEBAPP_URL:-"https://pdt.vlute.edu.vn/khao-sat"}
+NEXTAUTH_URL=${NEXTAUTH_URL:-"https://pdt.vlute.edu.vn/khao-sat"}
 LOG_LEVEL=${LOG_LEVEL:-"info"}
 
 # Generate secure random secrets on the fly if not provided
@@ -81,7 +81,7 @@ KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-""}
 KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET:-""}
 KEYCLOAK_BASE_URL=${KEYCLOAK_BASE_URL:-"https://sso.vlute.edu.vn"}
 KEYCLOAK_REALM=${KEYCLOAK_REALM:-"vlute"}
-KEYCLOAK_REDIRECT_URI=${KEYCLOAK_REDIRECT_URI:-"http://localhost:3000/api/auth/callback/openid"}
+KEYCLOAK_REDIRECT_URI=${KEYCLOAK_REDIRECT_URI:-"https://pdt.vlute.edu.vn/api/auth/callback/openid"}
 
 OIDC_CLIENT_ID=${OIDC_CLIENT_ID:-""}
 OIDC_CLIENT_SECRET=${OIDC_CLIENT_SECRET:-""}
