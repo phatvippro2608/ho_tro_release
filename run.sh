@@ -81,7 +81,7 @@ KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-""}
 KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET:-""}
 KEYCLOAK_BASE_URL=${KEYCLOAK_BASE_URL:-"https://sso.vlute.edu.vn"}
 KEYCLOAK_REALM=${KEYCLOAK_REALM:-"vlute"}
-KEYCLOAK_REDIRECT_URI=${KEYCLOAK_REDIRECT_URI:-"https://pdt.vlute.edu.vn/api/auth/callback/openid"}
+KEYCLOAK_REDIRECT_URI=${KEYCLOAK_REDIRECT_URI:-"http://localhost:3000/api/auth/callback/openid"}
 
 OIDC_CLIENT_ID=${OIDC_CLIENT_ID:-""}
 OIDC_CLIENT_SECRET=${OIDC_CLIENT_SECRET:-""}
@@ -624,6 +624,12 @@ EOF
 
 # ----------------- Launch Docker Compose -----------------
 echo "Deploying Docker Compose stack using temporary environment..."
+
+# Pull and rename upstream image to vlute_app_v4:prod for local execution uniformity
+echo "Pulling latest image and renaming to vlute_app_v4:prod..."
+sudo docker pull phattan5262/khaosat-web:latest
+sudo docker tag phattan5262/khaosat-web:latest vlute_app_v4:prod
+sudo docker rmi phattan5262/khaosat-web:latest
 
 sudo ENV_FILE=".env.tmp" docker compose up -d
 
