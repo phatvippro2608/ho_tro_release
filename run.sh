@@ -185,16 +185,7 @@ EOF
 # ----------------- Launch Docker Compose -----------------
 echo "Deploying Docker Compose stack using temporary environment..."
 
-if docker compose version >/dev/null 2>&1; then
-    COMPOSE_CMD="docker compose"
-elif command -v docker-compose >/dev/null 2>&1; then
-    COMPOSE_CMD="docker-compose"
-else
-    echo "Error: Neither 'docker compose' nor 'docker-compose' was found on this system!" >&2
-    exit 1
-fi
-
-ENV_FILE=".env.tmp" $COMPOSE_CMD -f "$SCRIPT_DIR/compose.yml" up -d
+ENV_FILE=".env.tmp" docker compose -f "$SCRIPT_DIR/compose.yml" up -d
 
 echo "----------------------------------------------------------"
 echo " Success! Khaosat VLUTE services are starting."
