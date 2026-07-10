@@ -2,7 +2,7 @@ services:
   # PostgreSQL with pgvector (required by Formbricks and Hub)
   postgres:
     restart: always
-    image: pgvector/pgvector:pg18
+    image: pgvector/pgvector:pg16
     container_name: khao_sat_postgres
     volumes:
       - postgres-data:/var/lib/postgresql/data
@@ -43,7 +43,7 @@ services:
     entrypoint: ["sh", "-c"]
     command:
       [
-        'if command -v timeout >/dev/null 2>&1; then timeout 300 node packages/database/dist/scripts/apply-migrations.js; else node packages/database/dist/scripts/apply-migrations.js; fi',
+        "if command -v timeout >/dev/null 2>&1; then timeout 300 node packages/database/dist/scripts/apply-migrations.js; else node packages/database/dist/scripts/apply-migrations.js; fi",
       ]
     depends_on:
       postgres:
@@ -77,7 +77,7 @@ services:
 
   # Create Hub's database if it does not exist
   hub-db-create:
-    image: pgvector/pgvector:pg18
+    image: pgvector/pgvector:pg16
     restart: "no"
     container_name: khao_sat_hub_db_create
     entrypoint: ["sh", "-c"]
