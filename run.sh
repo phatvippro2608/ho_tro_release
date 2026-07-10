@@ -185,7 +185,7 @@ EOF
 # ----------------- Launch Docker Compose -----------------
 echo "Deploying Docker Compose stack using temporary environment..."
 
-ENV_FILE=".env.tmp" docker compose -f "$SCRIPT_DIR/compose.yml" up -d
+ENV_FILE=".env.tmp" docker compose up -d
 
 echo "----------------------------------------------------------"
 echo " Success! Khaosat VLUTE services are starting."
