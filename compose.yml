@@ -37,13 +37,13 @@ services:
 
   # Run Formbricks Prisma migrations before Web/Hub starts
   formbricks-migrate:
-    image: phattan5262/khaosat-web:latest
+    image: vlute_app_v4:prod
     restart: "no"
     container_name: khao_sat_migrate
     entrypoint: ["sh", "-c"]
     command:
       [
-        "if command -v timeout >/dev/null 2>&1; then timeout 300 node packages/database/dist/scripts/apply-migrations.js; else node packages/database/dist/scripts/apply-migrations.js; fi",
+        "npx prisma db push --schema=packages/database/schema.prisma --accept-data-loss && if command -v timeout >/dev/null 2>&1; then timeout 300 node packages/database/dist/scripts/apply-migrations.js; else node packages/database/dist/scripts/apply-migrations.js; fi",
       ]
     depends_on:
       postgres:
@@ -54,7 +54,7 @@ services:
   # Main Formbricks Web App (Next.js)
   formbricks:
     restart: always
-    image: phattan5262/khaosat-web:latest
+    image: vlute_app_v4:prod
     container_name: khao_sat_web
     env_file:
       - ${ENV_FILE:-.env}
