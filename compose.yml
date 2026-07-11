@@ -40,7 +40,7 @@ services:
     restart: "no"
     container_name: khao_sat_migrate
     entrypoint: [ "sh", "-c" ]
-    command: [ "if command -v timeout >/dev/null 2>&1; then timeout 300 node packages/database/dist/scripts/apply-migrations.js; else node packages/database/dist/scripts/apply-migrations.js; fi && npx prisma db push --schema=packages/database/schema.prisma --accept-data-loss" ]
+    command: [ "if [ \"$$SKIP_APPLY_MIGRATIONS\" = \"true\" ]; then echo 'Bypassing migrations completely. DB must be structured manually.'; exit 0; else echo 'Running schema and data migrations...'; if command -v timeout >/dev/null 2>&1; then timeout 300 node packages/database/dist/scripts/apply-migrations.js || (echo 'Migration runner failed! Falling back to prisma db push...' && npx prisma db push --schema=packages/database/schema.prisma --accept-data-loss); else node packages/database/dist/scripts/apply-migrations.js || (echo 'Migration runner failed! Falling back to prisma db push...' && npx prisma db push --schema=packages/database/schema.prisma --accept-data-loss); fi; fi" ]
     depends_on:
       postgres:
         condition: service_healthy

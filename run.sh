@@ -180,7 +180,84 @@ NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=$NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
 NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=$NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
 NEXT_PUBLIC_FIREBASE_APP_ID=$NEXT_PUBLIC_FIREBASE_APP_ID
 NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=$NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
+SKIP_APPLY_MIGRATIONS=true
 EOF
+
+# ----------------- Database Command Line Utilities -----------------
+if [[ "$1" == "--db-push" || "$1" == "--db-migrate" || "$1" == "--db-unlock" || "$1" == "--db-status" || "$1" == "--db-import" || "$1" == "--db-reset" || "$1" == "--db-query" ]]; then
+    echo "=========================================================="
+    echo " Running Database Command Utility: $1"
+    echo "=========================================================="
+
+    # Ensure postgres container is running (it is required to talk to the DB)
+    echo "Checking database service status..."
+    sudo ENV_FILE=".env.tmp" docker compose -f "$SCRIPT_DIR/compose.yml" up -d postgres
+
+    # Wait for postgres to be ready
+    echo "Waiting for PostgreSQL database to become healthy..."
+    until [ "$(sudo docker inspect -f '{{.State.Health.Status}}' khao_sat_postgres 2>/dev/null)" == "healthy" ]; do
+        sleep 1
+    done
+    echo "PostgreSQL database is ready!"
+
+    case "$1" in
+        --db-push)
+            echo "Running prisma db push --accept-data-loss..."
+            sudo ENV_FILE=".env.tmp" docker compose -f "$SCRIPT_DIR/compose.yml" run --rm --entrypoint "sh" formbricks-migrate -c "npx prisma db push --schema=packages/database/schema.prisma --accept-data-loss"
+            ;;
+        --db-migrate)
+            echo "Running apply-migrations.js (schema & data migrations)..."
+            sudo ENV_FILE=".env.tmp" docker compose -f "$SCRIPT_DIR/compose.yml" run --rm --entrypoint "sh" formbricks-migrate -c "node packages/database/dist/scripts/apply-migrations.js"
+            ;;
+        --db-unlock)
+            echo "Unlocking stuck migrations (setting all 'pending' migrations to 'failed')..."
+            sudo docker exec -i khao_sat_postgres psql -U postgres -d formbricks -c "UPDATE \"DataMigration\" SET status = 'failed' WHERE status = 'pending';"
+            ;;
+        --db-status)
+            echo "Checking prisma migrate status..."
+            sudo ENV_FILE=".env.tmp" docker compose -f "$SCRIPT_DIR/compose.yml" run --rm --entrypoint "sh" formbricks-migrate -c "npx prisma migrate status --schema=packages/database/schema.prisma"
+            ;;
+        --db-import)
+            echo "Importing manual SQL schema (schema.sql) into PostgreSQL database..."
+            if [ -f "$SCRIPT_DIR/schema.sql" ]; then
+                sudo docker exec -i khao_sat_postgres psql -U postgres -d formbricks < "$SCRIPT_DIR/schema.sql"
+                echo "SQL schema imported successfully!"
+            else
+                echo "Error: schema.sql file not found at $SCRIPT_DIR/schema.sql!" >&2
+                exit 1
+            fi
+            ;;
+        --db-reset)
+            echo "WARNING: This will drop the database 'formbricks' and delete ALL data!"
+            if [[ "$2" == "--force" || "$2" == "-f" ]]; then
+                REPLY="y"
+            else
+                read -p "Are you sure you want to proceed? (y/N) " -n 1 -r
+                echo
+            fi
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                echo "Dropping database 'formbricks'..."
+                sudo docker exec -i khao_sat_postgres psql -U postgres -d postgres -c "DROP DATABASE IF EXISTS formbricks;"
+                echo "Recreating database 'formbricks'..."
+                sudo docker exec -i khao_sat_postgres psql -U postgres -d postgres -c "CREATE DATABASE formbricks;"
+                echo "Database reset successfully!"
+            else
+                echo "Operation cancelled."
+            fi
+            ;;
+        --db-query)
+            if [ -z "$2" ]; then
+                echo "Error: Please specify SQL query as the second argument." >&2
+                exit 1
+            fi
+            echo "Running SQL query: $2"
+            sudo docker exec -i khao_sat_postgres psql -U postgres -d formbricks -c "$2"
+            ;;
+    esac
+
+    echo "Database utility execution completed."
+    exit 0
+fi
 
 # ----------------- Write Cube.js Config and Schema -----------------
 echo "Writing CubeJS configuration and schema files..."
