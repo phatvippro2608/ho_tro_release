@@ -236,6 +236,8 @@ if [[ "$1" == "--db-push" || "$1" == "--db-migrate" || "$1" == "--db-unlock" || 
                 echo
             fi
             if [[ $REPLY =~ ^[Yy]$ ]]; then
+                echo "Terminating active connections to 'formbricks'..."
+                sudo docker exec -i khao_sat_postgres psql -U postgres -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'formbricks' AND pid <> pg_backend_pid();"
                 echo "Dropping database 'formbricks'..."
                 sudo docker exec -i khao_sat_postgres psql -U postgres -d postgres -c "DROP DATABASE IF EXISTS formbricks;"
                 echo "Recreating database 'formbricks'..."
